@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include "Adafruit_TCS34725.h"
 #include "WiFi.h"
+#include <Adafruit_NeoPixel.h>
 
 //******************************
 // pin constants
@@ -13,9 +14,7 @@
 // Digital pins:    [/, /, 2, /,/, /, 6, 7, /, /, 10, /, /, /]
 // Analog pins:     [A0, A1, A2, A3, /, /]
 
-"
-the motor sheild uses the following ports: {A0, A1, 3, 8, 9, 11, 12, 13}
-"
+//the motor sheild uses the following ports: {A0, A1, 3, 8, 9, 11, 12, 13}
 
   // line sensor pins:
   #define lineSensorA A5
@@ -26,22 +25,33 @@ the motor sheild uses the following ports: {A0, A1, 3, 8, 9, 11, 12, 13}
   #define triggerPin 5
 
   // channel A:
-  int directionA = 12; // HIGH = forward, LOW = reverse
-  int speedA = 3; 
-  int brakeA = 9;
-  int currentSensingA = 0; // not in use
+  #define directionA 12 // HIGH = forward, LOW = reverse
+  #define speedA 3
+  #define brakeA 9
+  //#define currentSensingA A0
 
+  const int currentSensingA = A0;
+  
   // channel B
-  int directionB = 13; // HIGH = forward, LOW = reverse
-  int speedB = 11;
-  int brakeB = 8;
-  int currentSensingB = 1; // not in use
+  #define directionB 13 // HIGH = forward, LOW = reverse
+  #define speedB 11
+  #define brakeB 8
+  #define currentSensingB A1
+
+  // neopixels pins
+  #define neoPixel 9
+  #define PIXELCOUNT 144 // amount neopixels currently in use
+
+  // RGB led pins
+//  #define redPin (to be determined)
+//  #define greenPin (to be determined)
+//  #define bluePin (to be determined)
 
 //******************************
 // variables
 //****************************** 
 
-// directio control for motor movement
+// direction control for motor movement
   enum control{
     forward,
     reverse,
@@ -66,6 +76,7 @@ the motor sheild uses the following ports: {A0, A1, 3, 8, 9, 11, 12, 13}
 //******************************
 
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_614MS, TCS34725_GAIN_1X);
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(PIXELCOUNT, neoPixel, NEO_GRB + NEO_KHZ800);
 
 //******************************
 // setup
@@ -73,6 +84,9 @@ Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_614MS, TCS347
 void setup() {
 
   Serial.begin(9600);
+
+  tcs.begin(); // color sensor
+  pixels.begin(); // neopixels
   
   //Setup motor A
   pinMode(directionA, OUTPUT); //Initiates Motor Channel A pin
@@ -91,47 +105,83 @@ void setup() {
   // line Sensors
   pinMode(lineSensorA, INPUT);
   pinMode(lineSensorB, INPUT);
+
+  // RGB led pins (to be determined, pins not assigned)
+//  pinMode(redPin, OUTPUT);
+//  pinMode(greenPin, OUTPUT);
+//  pinMode(bluePin, OUTPUT);
+
 }
 
 //******************************
 // loop
 //******************************
+
 void loop(){
 
 //  motorDirection(forward);
 //  delay(1000);
 //  motorDirection(halt);
 //  delay(1000);
-//  motorDirection(reverse);
+//  motorDirection(forward);
 //  delay(1000);
 //  motorDirection(halt);
 //  delay(1000); 
 
-
-// only for initial testing
-  readLineSensorA();
-  Serial.println(qreValue);
-
-  if(qreValue > 100){
-    motorDirection(forward);
-  } else {
-    motorDirection(reverse);
-  }
+ motorDirection(halt, 255*0.5);
+ Serial.println(getCurrentA());
 }
+
+//const double currentFactor = 2/3.3; // 2 Amps at 9 Volts: 0.22
 
 //******************************
 // Functions
 //******************************
 
-tuple getColorsensor(){
+// probably needs to be revised as it currently is a not great with all the numbers and such. 
+double getCurrentA(int motorCurrent){
+  const double currentFactor = 2/3.3; // 2 Amps at 3.3 Volts
+  double currentVoltage = map(analogRead(motorCurrent), 0, 1024, 0, 9000); // 9000 = 9V battery
+  double current = currentVoltage*currentFactor;
+  return current;
+}
 
-  tcs.getRawData(&r, &g, &b, &c);
+// function for showing color in neopixels
+void setColorNeopixel(int brightness){
 
-  rgbValue = tcs.getRGB(r,g,b);
-  colorTemp = tcs.calculateColorTemperature_dn40(r, g, b, c);
-  lux = tcs.calculateLux(r, g, b);
+  float red, green, blue;
+  tcs.setInterrupt(false);  // turn on LED
+  delay(60);  // takes 50ms to read
+  tcs.getRGB(&red, &green, &blue);
+  tcs.setInterrupt(true);  // turn off LED
+  
+  pixels.begin();
+  uint32_t color = pixels.Color(red,green,blue);
+  for (int i = 0; i < PIXELCOUNT; i++){
+    pixels.fill(color);
+    pixels.setBrightness(brightness);
+    pixels.show();
+  }
+}
 
-  return {rgbValue, colorTemp, lux};
+// function for showing color on a normal RGB led
+void setColorLED(){
+  
+  float red, green, blue;
+  tcs.setInterrupt(false);  // turn on LED
+  delay(60);  // takes 50ms to read
+  tcs.getRGB(&red, &green, &blue);
+  tcs.setInterrupt(true);  // turn off LED
+
+  Serial.print("R:\t"); Serial.print(int(red)); 
+  Serial.print("\tG:\t"); Serial.print(int(green)); 
+  Serial.print("\tB:\t"); Serial.print(int(blue));
+  Serial.print("\n");
+
+  // pins not assigned
+//  analogWrite(redPin, int(red));
+//  analogWrite(greenPin, int(green));
+//  analogWrite(bluePin, int(blue));
 }
 
 // rewrite function cause it sucks 
@@ -145,7 +195,7 @@ int readLineSensorB(){
   return qreValueB;
 }
 
-// get distance for ultrasound sensor
+// get distance for sonar sensor
 int getDistance(){
 
   digitalWrite(triggerPin,LOW);
@@ -163,40 +213,43 @@ int getDistance(){
 void motorControls(int dir, bool dirValue, int brake, bool breakValue, int velocityName, int velocityValue){
   digitalWrite(dir,dirValue);
   digitalWrite(brake,breakValue);
-  digitalWrite(velocityName,velocityValue);
+  analogWrite(velocityName,velocityValue);
 }
 
-void motorDirection(control c){
+void motorDirection(control c, int s){
   switch(c){
     case forward:
-      motorControls(directionA, true, brakeA, false, speedA, 255);
-      motorControls(directionB, true, brakeB, false, speedB, 255);
+      motorControls(directionA, true, brakeA, false, speedA, s);
+      motorControls(directionB, true, brakeB, false, speedB, s);
       break;
 
     case reverse:
-      motorControls(directionA, false, brakeA, false, speedA, 255);
-      motorControls(directionB, false, brakeB, false, speedB, 255);
+      motorControls(directionA, false, brakeA, false, speedA, s);
+      motorControls(directionB, false, brakeB, false, speedB, s);
       break;
 
      case left:
-      motorControls(directionA, true, brakeA, true, speedA, 0);
-      motorControls(directionB, true, brakeB, true, speedB, 0);
+      motorControls(directionA, true, brakeA, true, speedA, s);
+      motorControls(directionB, true, brakeB, true, speedB, s);
       break;
 
     case right:
-      motorControls(directionA, true, brakeA, true, speedA, 255);
-      motorControls(directionB, false, brakeB, true, speedB, 255);
+      motorControls(directionA, true, brakeA, true, speedA, s);
+      motorControls(directionB, false, brakeB, true, speedB, s);
       break;
 
     case halt:
-      motorControls(directionA, false, brakeA, true, speedA, 255);
-      motorControls(directionB, true, brakeB, true, speedB, 255);
+      motorControls(directionA, false, brakeA, true, speedA, s);
+      motorControls(directionB, true, brakeB, true, speedB, s);
       break;
   }
 }
 
+
+
 // robtek opgave formulering
-"
+
+/*
 --- opgave formulering ---
 
 * En bane udformes med sorte kanter således at robotten kan læse og se kanterne
@@ -213,7 +266,7 @@ void motorDirection(control c){
 
 * robottens bevægelse skal være præsis nok til at, dens position kan bestemmes, ud fra et start punkt. 
 
-* print er nice to have og ikke need to have. (men det er selvfølgelig bedre at have det, men det behøver ikke at være der.) 
+* 3d print er nice to have og ikke need to have. (men det er selvfølgelig bedre at have det, men det behøver ikke at være der.) 
 
 ---- gode idere ---
 
@@ -223,4 +276,4 @@ void motorDirection(control c){
 
 * kan evt benytte breath first search for at finde alle tiles i en grid. 
 
-"
+*/
