@@ -1,0 +1,5 @@
+{
+    "board": "arduino:avr:uno",
+    "sketch": "motorsheild_testing.ino",
+    "port": "COM5"
+}

@@ -6,7 +6,7 @@
 #include "WiFi.h"
 #include <Adafruit_NeoPixel.h>
 #include "digital_compass.h"
-
+#include "IRremote.h"
 //******************************
 // pin constants
 //******************************
@@ -39,6 +39,9 @@ const int currentSensingA = A0;
 #define brakeB 8
 #define currentSensingB A1
 
+float turningTarget = 0.0;
+bool isTurning = false;
+bool setTurn = false;
 // neopixels pins
 #define neoPixel 9
 #define PIXELCOUNT 5 // amount neopixels currently in use
@@ -46,7 +49,19 @@ const int currentSensingA = A0;
 // RGB led pins
 #define redPin 6
 #define greenPin 5
-#define bluePin 10
+//#define bluePin 10
+
+int receiver = 10; // Signal Pin of IR receiver to Arduino Digital Pin 11
+
+/*-----( Declare objects )-----*/
+IRrecv irrecv(receiver); // create instance of 'irrecv'
+decode_results results;  // create instance of 'decode_results'
+long remoteButtonDelay;
+
+/*-----( Function )-----*/
+// takes action based on IR code received
+
+// describing Remote IR codes
 
 //******************************
 // variables
@@ -64,7 +79,7 @@ enum control
 
 // Calibration
 #define button 4
-int buttonState = 0;
+int buttonState;
 bool pressed;
 
 // color sensor
@@ -114,7 +129,7 @@ void setup()
   // sonar sensor
   // pinMode(triggerPin, OUTPUT);
   // pinMode(echoPin, INPUT);
-
+  irrecv.enableIRIn();
   for (int i = 0; i < 256; i++)
   {
     float x = i;
@@ -134,40 +149,147 @@ void setup()
   // RGB led pins (to be determined, pins not assigned)
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
-  pinMode(bluePin, OUTPUT);
+  // pinMode(bluePin, OUTPUT);
+  analogWrite(greenPin, 0);
+  analogWrite(redPin, 255);
 }
 
 //******************************
 // loop
 //******************************
+void translateIR() // takes action based on IR code received
+{
+  switch (results.value)
+  {
+  case 0xFFA25D:
+    Serial.println("POWER");
+    break;
+  case 0xFFE21D:
+    Serial.println("FUNC/STOP");
+    break;
+  case 0xFF629D:
+    Serial.println("VOL+");
+    break;
+  case 0xFF22DD:
+    Serial.println("FAST BACK");
+    break;
+  case 0xFF02FD:
+    Serial.println("PAUSE");
+    break;
+  case 0xFFC23D:
+    Serial.println("FAST FORWARD");
+    break;
+  case 0xFFE01F:
+    Serial.println("DOWN");
+    break;
+  case 0xFFA857:
+    Serial.println("VOL-");
+    break;
+  case 0xFF906F:
+    Serial.println("UP");
+    break;
+  case 0xFF9867:
+    Serial.println("EQ");
+    break;
+  case 0xFFB04F:
+    Serial.println("ST/REPT");
+    break;
+  case 0xFF6897:
+    Serial.println("0");
+    break;
+  case 0xFF30CF:
+    Serial.println("1");
+    motorDirection(forward, 255);
+    break;
+  case 0xFF18E7:
+    Serial.println("2");
+    turn(360.0);
+    break;
+  case 0xFF7A85:
+    Serial.println("3");
+    break;
+  case 0xFF10EF:
+    Serial.println("4");
+    turn(270.0);
+    break;
+  case 0xFF38C7:
+    Serial.println("5");
+    motorDirection(halt, 0);
+    break;
+  case 0xFF5AA5:
+    Serial.println("6");
+    turn(90.0);
+    break;
+  case 0xFF42BD:
+    Serial.println("7");
+    motorDirection(reverse, 255);
+    break;
+  case 0xFF4AB5:
+    Serial.println("8");
+    turn(180.0);
+    break;
+  case 0xFF52AD:
+    Serial.println("9");
+    break;
+  case 0xFFFFFFFF:
+    Serial.println(" REPEAT");
+    break;
 
+  default:
+    Serial.println(" other button   ");
+
+  } // End Case
+}
 void loop()
 {
   int speed = 255 * 0.5;
   float yaw, pitch, roll;
-
-  getRotationContinuous(&yaw, &pitch, &roll);
-
-
-
-  {
-    motorDirection(halt, 255);
-  }
   buttonState = digitalRead(button);
-
+  getRotationContinuous(&yaw);
+  // Serial.print(yaw);
+  // Serial.println(" Yaw ");
+  if (setTurn)
+  {
+    setTurningPoint(turningTarget, &yaw, 255);
+  }
+  if (isTurning)
+  {
+    isTurning = !reachedTarget(&yaw, turningTarget);
+    if (!isTurning)
+    {
+      motorDirection(halt, 0);
+      // Test LED from color sensor
+      analogWrite(greenPin, 0);
+      analogWrite(redPin, 255);
+    }
+  }
   if (millis() % 200 == 0)
   {
-    setColorLED();
+    // setColorLED();
   }
 
-  if (buttonState == LOW && !pressed)
+  // if (buttonState == LOW && !pressed)
+  // {
+  //   turn(360.0);
+  //   pressed = true;
+
+  //   // stuff
+  // }
+  // else if (pressed && buttonState == HIGH)
+  // {
+  //   Serial.println("awdawd");
+  //   pressed = false;
+  // }
+
+  if (irrecv.decode(&results) && !pressed) // have we received an IR signal?
   {
-    Serial.println("HAOIDAJIWODJIAWODA FUCK");
+    Serial.println("test");
+    translateIR();
+    irrecv.resume(); // receive the next value
+    remoteButtonDelay = millis() + 500;
     pressed = true;
-
-    // stuff
   }
-  else if (pressed && buttonState == HIGH)
+  if (millis() > remoteButtonDelay)
   {
     pressed = false;
   }
@@ -227,8 +349,10 @@ void setColorLED()
   // pins not assigned
   analogWrite(redPin, gammatable[(int)red]);
   analogWrite(greenPin, gammatable[(int)green]);
-  analogWrite(bluePin, gammatable[(int)blue]);
+  // analogWrite(bluePin, gammatable[(int)blue]);
 }
+
+// Test functions
 
 // rewrite function cause it sucks
 // int readLineSensorA(){
@@ -264,10 +388,73 @@ void motorControls(int dir, bool dirValue, int brake, bool breakValue, int veloc
   analogWrite(velocityName, velocityValue);
 }
 
+void turn(float target)
+{
+  turningTarget = target;
+  setTurn = true;
+}
+
+void setTurningPoint(float turningPoint, float *currentDegrees, float speed)
+{
+
+  motorControls(directionA, calculateRotationDirection(turningPoint, currentDegrees), brakeA, false, speedA, speed);
+  motorControls(directionB, calculateRotationDirection(turningPoint, currentDegrees), brakeB, false, speedB, speed);
+  analogWrite(greenPin, 255);
+  analogWrite(redPin, 0);
+  isTurning = true;
+  setTurn = false;
+}
+
+bool calculateRotationDirection(float turningPoint, float *currentDegrees)
+{
+  if (*currentDegrees > turningPoint)
+  {
+    int dif1 = *currentDegrees - turningPoint;
+    int dif2 = 360.0 - *currentDegrees + turningPoint;
+    if(dif1 > dif2) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+  else if(*currentDegrees < turningPoint)
+  {
+    int dif1 = turningPoint - *currentDegrees;
+    int dif2 = 360.0 - turningPoint + *currentDegrees;
+    if(dif1 < dif2) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+  else{
+    return true;
+  }
+}
+
+bool reachedTarget(float *degree, float target)
+{
+  float margin = 2;
+  if (target == 360.0)
+  {
+    if ((*degree >= (target - margin)) || (*degree <= (target - (360 - margin))))
+    {
+      return true;
+    }
+  }
+  else
+  {
+    if (*degree >= (target - margin) && (target + margin) >= *degree)
+    {
+      return true;
+    }
+  }
+  return false;
+}
 // void turnDirection(control c) {
-//   switch (c) 
+//   switch (c)
 //   {
-//     case north: 
+//     case north:
 
 //   }
 // }
@@ -287,8 +474,7 @@ void motorDirection(control c, int s)
     break;
 
   case right:
-    motorControls(directionA, true, brakeA, false, speedA, s);
-    motorControls(directionB, true, brakeB, false, speedB, s);
+
     break;
 
   case left:
