@@ -54,6 +54,7 @@ bool setTurn = false;
 #define redPin 6
 #define greenPin 5
 //#define bluePin 10
+float yaw;
 
 int receiver = 10; // Signal Pin of IR receiver to Arduino Digital Pin 11
 
@@ -82,7 +83,7 @@ enum control
 };
 
 // Calibration
-#define button 4
+#define lineDetected 4
 int buttonState;
 bool pressed;
 
@@ -112,13 +113,14 @@ void setup()
 {
 
   Serial.begin(115200);
-
+  yaw = 0.0;
   startMPU();
+ 
   tcs.begin();    // color sensor
   pixels.begin(); // neopixels
 
   // Button
-  pinMode(button, INPUT_PULLUP);
+  pinMode(lineDetected, OUTPUT);
 
   // Setup motor A
   pinMode(directionA, OUTPUT); // Initiates Motor Channel A pin
@@ -248,11 +250,12 @@ void translateIR() // takes action based on IR code received
 void loop()
 {
   int speed = 255 * 0.5;
-  float yaw, pitch, roll;
-  buttonState = digitalRead(button);
+
+  
+  Serial.print(yaw);
   getRotationContinuous(&yaw);
-  // Serial.print(yaw);
-  // Serial.println(" Yaw ");
+  Serial.println(" Yaw A WIZARD");
+  Serial.println(freeRam());
   if (setTurn)
   {
     setTurningPoint(turningTarget, &yaw, 255);
@@ -262,7 +265,7 @@ void loop()
     isTurning = !reachedTarget(&yaw, turningTarget);
     if (!isTurning)
     {
-      motorDirection(halt, 0);
+      //motorDirection(halt, 0);
       // Test LED from color sensor
       analogWrite(greenPin, 0);
       analogWrite(redPin, 255);
@@ -270,9 +273,10 @@ void loop()
   }
   if (millis() % 200 == 0)
   {
-    readLineSensor();
+    
     // setColorLED();
   }
+  readLineSensor();
 
   // if (buttonState == LOW && !pressed)
   // {
@@ -299,17 +303,33 @@ void loop()
   {
     pressed = false;
   }
-  
+
   // setColorNeopixel(100);
 }
 
-void readLineSensor() {
+int freeRam() {
+  extern int __heap_start, *__brkval;
+  int v;
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+}
+
+void readLineSensor()
+{
   int read1 = analogRead(lineSens1);
+  int remapped = map(read1, 0, 1023,0,100);
   int read2 = analogRead(lineSens2);
-  Serial.print("Line Sensor 1: ");
-  Serial.println(read1);
-  Serial.print("Line Sensor 2: ");
-  Serial.println(read2);
+  // Serial.print("Line Sensor 1: ");
+  // Serial.println(remapped);
+  // Serial.print("Line Sensor 2: ");
+  // Serial.println(read2);
+  if (remapped > 59)
+  {
+    digitalWrite(lineDetected, LOW);
+  }
+  else
+  {
+    digitalWrite(lineDetected, HIGH);
+  }
 }
 
 // const double currentFactor = 2/3.3; // 2 Amps at 9 Volts: 0.22
@@ -413,14 +433,13 @@ void turn(float target)
 void setTurningPoint(float turningPoint, float *currentDegrees, float speed)
 {
 
-  motorControls(directionA, calculateRotationDirection(turningPoint, currentDegrees), brakeA, false, speedA, speed);
-  motorControls(directionB, calculateRotationDirection(turningPoint, currentDegrees), brakeB, false, speedB, speed);
+  // motorControls(directionA, calculateRotationDirection(turningPoint, currentDegrees), brakeA, false, speedA, speed);
+  // motorControls(directionB, calculateRotationDirection(turningPoint, currentDegrees), brakeB, false, speedB, speed);
   analogWrite(greenPin, 255);
   analogWrite(redPin, 0);
   isTurning = true;
   setTurn = false;
 }
-
 
 bool calculateRotationDirection(float turningPoint, float *currentDegrees)
 {
@@ -428,30 +447,37 @@ bool calculateRotationDirection(float turningPoint, float *currentDegrees)
   {
     int dif1 = *currentDegrees - turningPoint;
     int dif2 = 360.0 - *currentDegrees + turningPoint;
-    if(dif1 > dif2) {
+    if (dif1 > dif2)
+    {
       return false;
-    } else {
+    }
+    else
+    {
       return true;
     }
   }
-  else if(*currentDegrees < turningPoint)
+  else if (*currentDegrees < turningPoint)
   {
     int dif1 = turningPoint - *currentDegrees;
     int dif2 = 360.0 - turningPoint + *currentDegrees;
-    if(dif1 < dif2) {
+    if (dif1 < dif2)
+    {
       return false;
-    } else {
+    }
+    else
+    {
       return true;
     }
   }
-  else{
+  else
+  {
     return true;
   }
 }
 
 bool reachedTarget(float *degree, float target)
 {
-  float margin = 2;
+  float margin = 5;
   if (target == 360.0)
   {
     if ((*degree >= (target - margin)) || (*degree <= (target - (360 - margin))))

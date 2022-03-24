@@ -37,13 +37,7 @@
                 "C:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\libraries\\Wire\\src",
                 "C:\\Users\\fredd\\Documents\\Arduino\\libraries\\Adafruit_TCS34725",
                 "C:\\Users\\fredd\\Documents\\Arduino\\libraries\\Adafruit_BusIO",
-                "C:\\Program Files (x86)\\Arduino\\libraries\\WiFi\\src",
-                "C:\\Users\\fredd\\Documents\\Arduino\\libraries\\Adafruit_NeoPixel",
-                "C:\\Users\\fredd\\Documents\\Arduino\\libraries\\DigitalCompass",
-                "C:\\Users\\fredd\\Documents\\Arduino\\libraries\\IRremote",
                 "C:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\libraries\\SPI\\src",
-                "C:\\Users\\fredd\\Documents\\Arduino\\libraries\\I2Cdev",
-                "C:\\Users\\fredd\\Documents\\Arduino\\libraries\\MPU6050",
                 "c:\\program files (x86)\\arduino\\hardware\\tools\\avr\\lib\\gcc\\avr\\7.3.0\\include",
                 "c:\\program files (x86)\\arduino\\hardware\\tools\\avr\\lib\\gcc\\avr\\7.3.0\\include-fixed",
                 "c:\\program files (x86)\\arduino\\hardware\\tools\\avr\\avr\\include"
