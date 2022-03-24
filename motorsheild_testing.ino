@@ -25,6 +25,10 @@
 // #define echoPin 4
 // #define triggerPin 5
 
+// Line Sensor
+#define lineSens1 A2
+#define lineSens2 A3
+
 // channel A:
 #define directionA 12 // HIGH = forward, LOW = reverse
 #define speedA 3
@@ -126,6 +130,7 @@ void setup()
   pinMode(brakeB, OUTPUT);     // Initiates Brake Channel B pin
   pinMode(speedB, OUTPUT);
 
+  // Setup Line Sensor
   // sonar sensor
   // pinMode(triggerPin, OUTPUT);
   // pinMode(echoPin, INPUT);
@@ -265,6 +270,7 @@ void loop()
   }
   if (millis() % 200 == 0)
   {
+    readLineSensor();
     // setColorLED();
   }
 
@@ -293,7 +299,17 @@ void loop()
   {
     pressed = false;
   }
+  
   // setColorNeopixel(100);
+}
+
+void readLineSensor() {
+  int read1 = analogRead(lineSens1);
+  int read2 = analogRead(lineSens2);
+  Serial.print("Line Sensor 1: ");
+  Serial.println(read1);
+  Serial.print("Line Sensor 2: ");
+  Serial.println(read2);
 }
 
 // const double currentFactor = 2/3.3; // 2 Amps at 9 Volts: 0.22
@@ -404,6 +420,7 @@ void setTurningPoint(float turningPoint, float *currentDegrees, float speed)
   isTurning = true;
   setTurn = false;
 }
+
 
 bool calculateRotationDirection(float turningPoint, float *currentDegrees)
 {
