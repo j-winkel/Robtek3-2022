@@ -2,17 +2,20 @@
 #include <Wire.h>
 #include "Adafruit_TCS34725.h"
 #include "wifi_pass.h"
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 // declaration
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
 // constant variables
 const int port = 8080;
-const char* host ="192.168.0.29";
+const char* host ="192.168.0.119";
 
 WiFiClient client;
 
 String postData;
+String testPost;
 String postVariable = "";
 
 
@@ -44,23 +47,39 @@ void loop(){
     tcs.getRGB(&red, &green, &blue);
     tcs.setInterrupt(true);  // turn off LED
 
-    postData = String(red) + " " + String(green) + " " + String(red);
+    postData = String(red) + " " + String(green) + " " + String(blue);
+    testPost = "{test: 20}";
     // just for testing purpose
     Serial.println(postData);
 
-  if (client.connect(host,8080)){
-    client.println("POST / HTTP/1.1");
-    client.println("Content-Type: application/json");
-    client.print("Content-Length: ");
-    client.println(postData.length());
-    client.println();
-    client.print(postData);
-    delay(1000);
+  if(WiFi.status() == WL_CONNECTED) {
+    char jsonOutput[256];
+    HTTPClient client;
+    client.begin("http://192.168.0.119:3000/test");
+    client.addHeader("Content-Type", "application/json");
+    
+    //Sets up the JSON file
+    const size_t CAPACITY = JSON_OBJECT_SIZE(6);
+    StaticJsonDocument<CAPACITY> doc;
+
+    JsonObject object = doc.to<JsonObject>();
+    object["red"] =  String(red);
+    object["green"] = String(green);
+    object["blue"] = String(blue);
+    
+    //Serializes it
+    serializeJson(doc, jsonOutput);
+
+
+    int httpCode = client.POST(String(jsonOutput));
+    Serial.println(httpCode);
+    if(httpCode > 0) {
+      client.end();
+    }
+
   }
 
-  if (client.connected()){
-    client.stop();
-  }
+  
 }
 
 
@@ -79,4 +98,3 @@ void loop(){
 //   Serial.print("\tB:\t"); Serial.print(int(blue));
 //   Serial.print("\n");
 // }
-
