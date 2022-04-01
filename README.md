@@ -27,6 +27,7 @@ Using an MPU5060 with a decoupling capacitor to reduce electrical noise.
  
 **Arduino Wifi**
 - Install required drivers and the WIFININA libiary. 
+- Install board type (megaAVR). 
 
 
 **TODO**
