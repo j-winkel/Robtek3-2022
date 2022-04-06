@@ -45,3 +45,8 @@ Using an MPU5060 with a decoupling capacitor to reduce electrical noise.
 - Power supply: choose suitable power supply to power car and additional components. 
 - 
 
+---
+
+**[Tinkercad link](https://www.tinkercad.com/things/cVaP56cp1Xu-magnificent-jarv-wluff/edit?sharecode=f-WMT-jDCFX4ljCWVwpv9Y9nf8SZGSp0SBOLLC0KjG4)** 
+
+
