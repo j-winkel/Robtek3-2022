@@ -28,6 +28,7 @@ Using an MPU5060 with a decoupling capacitor to reduce electrical noise.
 **Arduino Wifi**
 - Install required drivers and the WIFININA libiary. 
 - Install board type (megaAVR). 
+- pin 10 on the motorsheilld should be connected to pin 11 on the arduino wifi as pin 10 is not able to use PWM and it is needed for the motor control. 
 
 
 **TODO**
