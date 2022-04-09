@@ -1,2 +1,2 @@
-#define SSID "Hyggebulen-2G"
-#define PASSWORD "L3C4PPCGX4"
+#define SSID "Ricosnet"
+#define PASSWORD "rocket123"
