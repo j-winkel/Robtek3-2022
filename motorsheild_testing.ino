@@ -1,12 +1,26 @@
+
+
+
+#include <ac_LG.h>
+#include <digitalWriteFast.h>
+#include <IRProtocol.h>
+#include <IRremote.h>
+#include <IRremoteInt.h>
+#include <LongUnion.h>
+#include <TinyIRReceiver.h>
+
 //******************************
 // libiaries
 //******************************
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiNINA.h>
+
 #include <Wire.h>
 #include "Adafruit_TCS34725.h"
-#include "WiFi.h"
-#include <Adafruit_NeoPixel.h>
-#include "digital_compass.h"
-#include "IRremote.h"
+//#include <TinyMPU6050.h>
+#include <MPU6050_tockn.h>
+
 //******************************
 // pin constants
 //******************************
@@ -39,24 +53,25 @@ const int currentSensingA = A0;
 
 // channel B
 #define directionB 13 // HIGH = forward, LOW = reverse
-#define speedB 11
+#define speedB 10
 #define brakeB 8
 #define currentSensingB A1
 
 float turningTarget = 0.0;
 bool isTurning = false;
 bool setTurn = false;
+bool checkDegree = true;
 // neopixels pins
 #define neoPixel 9
 #define PIXELCOUNT 5 // amount neopixels currently in use
 
 // RGB led pins
-#define redPin 6
+//#define redPin 6
 #define greenPin 5
 //#define bluePin 10
 float yaw;
 
-int receiver = 10; // Signal Pin of IR receiver to Arduino Digital Pin 11
+int receiver = 6; // Signal Pin of IR receiver to Arduino Digital Pin 11
 
 /*-----( Declare objects )-----*/
 IRrecv irrecv(receiver); // create instance of 'irrecv'
@@ -98,26 +113,55 @@ int qreValueB;
 // sonar sensor
 int duration;
 int distance;
-
+MPU6050 mpu(Wire);
 //******************************
 // Declaration type
 //******************************
 
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_614MS, TCS34725_GAIN_1X);
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(PIXELCOUNT, neoPixel, NEO_GRB + NEO_KHZ800);
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
+// Adafruit_NeoPixel pixels = Adafruit_NeoPixel(PIXELCOUNT, neoPixel, NEO_GRB + NEO_KHZ800);
 
-//******************************
-// setup
-//******************************
+char host[] = "federicoshytte.dk";
+
+WiFiClient client;
+
+String postData;
+String testPost;
+String postVariable = "";
+
+void setupWifi()
+{
+  // Connecting to wifi
+  Serial.println("Connecting to wifi: ");
+  WiFi.begin("Hyggebulen-2G", "L3C4PPCGX4");
+  // wating for connection
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    WiFi.begin("Hyggebulen-2G", "L3C4PPCGX4");
+    delay(1000);
+    Serial.print(". ");
+  }
+  Serial.println("");
+  Serial.print("WiFi connected: "),
+  Serial.print(WiFi.localIP()); // print the connected ip
+}
+// ================================================================
+// ===                         Setup                            ===
+// ================================================================
+
 void setup()
 {
 
-  Serial.begin(115200);
+  Serial.begin(9600);
+
   yaw = 0.0;
-  startMPU();
- 
-  tcs.begin();    // color sensor
-  pixels.begin(); // neopixels
+  mpu.begin();
+  mpu.calcGyroOffsets(true);
+  Serial.println("=====================================");
+  Serial.println("Starting calibration...");
+  tcs.begin(); // color sensor
+  setupWifi();
+  // pixels.begin(); // neopixels
 
   // Button
   pinMode(lineDetected, OUTPUT);
@@ -154,11 +198,11 @@ void setup()
   // pinMode(lineSensorB, INPUT);
 
   // RGB led pins (to be determined, pins not assigned)
-  pinMode(redPin, OUTPUT);
+  // pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
   // pinMode(bluePin, OUTPUT);
   analogWrite(greenPin, 0);
-  analogWrite(redPin, 255);
+  // analogWrite(redPin, 255);
 }
 
 //******************************
@@ -249,13 +293,23 @@ void translateIR() // takes action based on IR code received
 }
 void loop()
 {
+  if(millis() % 5000 == 0) {
+    checkDegree = false;
+    delay(1000);
+    setColorLED();
+  }
+
+  if(checkDegree) {
+    mpu.update();
+    Serial.println(mpu.getAngleZ());
+  }
+
+    // delay(1000);
+    // setColorLED();
+  
+
   int speed = 255 * 0.5;
 
-  
-  Serial.print(yaw);
-  getRotationContinuous(&yaw);
-  Serial.println(" Yaw A WIZARD");
-  Serial.println(freeRam());
   if (setTurn)
   {
     setTurningPoint(turningTarget, &yaw, 255);
@@ -265,18 +319,14 @@ void loop()
     isTurning = !reachedTarget(&yaw, turningTarget);
     if (!isTurning)
     {
-      //motorDirection(halt, 0);
-      // Test LED from color sensor
+      // motorDirection(halt, 0);
+      //  Test LED from color sensor
       analogWrite(greenPin, 0);
-      analogWrite(redPin, 255);
+      // analogWrite(redPin, 255);
     }
   }
-  if (millis() % 200 == 0)
-  {
-    
-    // setColorLED();
-  }
-  readLineSensor();
+
+  //readLineSensor();
 
   // if (buttonState == LOW && !pressed)
   // {
@@ -307,16 +357,17 @@ void loop()
   // setColorNeopixel(100);
 }
 
-int freeRam() {
+int freeRam()
+{
   extern int __heap_start, *__brkval;
   int v;
-  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
 }
 
 void readLineSensor()
 {
   int read1 = analogRead(lineSens1);
-  int remapped = map(read1, 0, 1023,0,100);
+  int remapped = map(read1, 0, 1023, 0, 100);
   int read2 = analogRead(lineSens2);
   // Serial.print("Line Sensor 1: ");
   // Serial.println(remapped);
@@ -355,25 +406,26 @@ void setColorNeopixel(int brightness)
   tcs.getRGB(&red, &green, &blue);
   tcs.setInterrupt(true); // turn off LED
 
-  pixels.begin();
-  uint32_t color = pixels.Color(red, green, blue);
-  for (int i = 0; i < PIXELCOUNT; i++)
-  {
-    pixels.fill(color);
-    pixels.setBrightness(brightness);
-    pixels.show();
-  }
+  // pixels.begin();
+  // uint32_t color = pixels.Color(red, green, blue);
+  // for (int i = 0; i < PIXELCOUNT; i++)
+  // {
+  //   pixels.fill(color);
+  //   pixels.setBrightness(brightness);
+  //   pixels.show();
+  // }
 }
 
 // function for showing color on a normal RGB led
 void setColorLED()
 {
-
+  
   float red, green, blue;
   tcs.setInterrupt(false); // turn on LED             // takes 50ms to read
   tcs.getRGB(&red, &green, &blue);
+  delay(100);
   tcs.setInterrupt(true); // turn off LED
-
+  delay(100);
   Serial.print("R:\t");
   Serial.print(int(red));
   Serial.print("\tG:\t");
@@ -381,10 +433,10 @@ void setColorLED()
   Serial.print("\tB:\t");
   Serial.print(int(blue));
   Serial.print("\n");
-
+  sendColor(200.f, 255.f, 255.f);
   // pins not assigned
-  analogWrite(redPin, gammatable[(int)red]);
-  analogWrite(greenPin, gammatable[(int)green]);
+  // analogWrite(redPin, gammatable[(int)red]);
+  //analogWrite(greenPin, gammatable[(int)green]);
   // analogWrite(bluePin, gammatable[(int)blue]);
 }
 
@@ -435,8 +487,8 @@ void setTurningPoint(float turningPoint, float *currentDegrees, float speed)
 
   // motorControls(directionA, calculateRotationDirection(turningPoint, currentDegrees), brakeA, false, speedA, speed);
   // motorControls(directionB, calculateRotationDirection(turningPoint, currentDegrees), brakeB, false, speedB, speed);
-  analogWrite(greenPin, 255);
-  analogWrite(redPin, 0);
+  //analogWrite(greenPin, 255);
+  // analogWrite(redPin, 0);
   isTurning = true;
   setTurn = false;
 }
@@ -532,33 +584,57 @@ void motorDirection(control c, int s)
   }
 }
 
-// robtek opgave formulering
+void sendColor(float red, float green, float blue)
+{
+  postData = String(red) + ":" + String(green) + ":" + String(blue);
+  // just for testing purpose
 
-/*
---- opgave formulering ---
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    if(client.connect(host, 80)) {
+      Serial.println("connected to server");
+      // Make a HTTP request:
+      client.println("POST /api/colors HTTP/1.1");
+      client.println("Host: " + String(host));
+      client.println("Content-Type: text/plain");
+      client.println("tester:"
+                     "" +
+                     postData);
+      client.println("Connection: close");
+      client.println();
+      delay(1000);  
+    }
+ 
+    checkDegree = true;
+  }
+}
+  // robtek opgave formulering
 
-* En bane udformes med sorte kanter således at robotten kan læse og se kanterne
+  /*
+  --- opgave formulering ---
 
-* banen består af en grid med forskellige farver hvorfra disse farves position skal rapporteres tilbage.
+  * En bane udformes med sorte kanter således at robotten kan læse og se kanterne
 
-* tidligere er der blevet brugt digital compas, og det er en mulighed at benytte dette
+  * banen består af en grid med forskellige farver hvorfra disse farves position skal rapporteres tilbage.
 
-* der kan benyttes encoder eller tacometer til at bestelle motor rotation.
+  * tidligere er der blevet brugt digital compas, og det er en mulighed at benytte dette
 
-* line sensor kan erstattes af farve sensor.
+  * der kan benyttes encoder eller tacometer til at bestelle motor rotation.
 
-* iot består af at melde kordinater tilbage til pc, og evt. starte robotten med et signal fra pc.
+  * line sensor kan erstattes af farve sensor.
 
-* robottens bevægelse skal være præsis nok til at, dens position kan bestemmes, ud fra et start punkt.
+  * iot består af at melde kordinater tilbage til pc, og evt. starte robotten med et signal fra pc.
 
-* 3d print er nice to have og ikke need to have. (men det er selvfølgelig bedre at have det, men det behøver ikke at være der.)
+  * robottens bevægelse skal være præsis nok til at, dens position kan bestemmes, ud fra et start punkt.
 
----- gode idere ---
+  * 3d print er nice to have og ikke need to have. (men det er selvfølgelig bedre at have det, men det behøver ikke at være der.)
 
-* kan regulrererobottens position med line sonsore der sidder i parallel.
+  ---- gode idere ---
 
-* ser ikke ud som om der skal benyttes obsicale avidnce alligevelle.
+  * kan regulrererobottens position med line sonsore der sidder i parallel.
 
-* kan evt benytte breath first search for at finde alle tiles i en grid.
+  * ser ikke ud som om der skal benyttes obsicale avidnce alligevelle.
 
-*/
+  * kan evt benytte breath first search for at finde alle tiles i en grid.
+
+  */

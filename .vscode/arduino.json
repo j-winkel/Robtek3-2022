@@ -1,6 +1,7 @@
 {
-    "board": "esp32:esp32:esp32",
-    "sketch": "fucker\\colour.ino",
-    "port": "COM1",
-    "configuration": "PSRAM=enabled,PartitionScheme=default,CPUFreq=240,FlashMode=qio,FlashFreq=80,FlashSize=4M,UploadSpeed=921600,DebugLevel=none"
+    "board": "arduino:megaavr:uno2018",
+    "sketch": "motorsheild_testing.ino",
+    "port": "COM6",
+    "configuration": "mode=off",
+    "programmer": "arduino:medbg"
 }
