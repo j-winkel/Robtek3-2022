@@ -1,6 +1,5 @@
 
 
-
 #include <ac_LG.h>
 #include <digitalWriteFast.h>
 #include <IRProtocol.h>
@@ -16,7 +15,6 @@
 #include <WiFiClient.h>
 #include <WiFiNINA.h>
 
-#include <Wire.h>
 #include "Adafruit_TCS34725.h"
 //#include <TinyMPU6050.h>
 #include <MPU6050_tockn.h>
@@ -118,6 +116,8 @@ MPU6050 mpu(Wire);
 // Declaration type
 //******************************
 
+long lastTime = 0;
+
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 // Adafruit_NeoPixel pixels = Adafruit_NeoPixel(PIXELCOUNT, neoPixel, NEO_GRB + NEO_KHZ800);
 
@@ -133,11 +133,12 @@ void setupWifi()
 {
   // Connecting to wifi
   Serial.println("Connecting to wifi: ");
-  WiFi.begin("Hyggebulen-2G", "L3C4PPCGX4");
+  WiFi.begin("SprutteNet", "spruttesan");
   // wating for connection
   while (WiFi.status() != WL_CONNECTED)
   {
-    WiFi.begin("Hyggebulen-2G", "L3C4PPCGX4");
+    WiFi.begin("SprutteNet", "spruttesan");
+
     delay(1000);
     Serial.print(". ");
   }
@@ -155,12 +156,12 @@ void setup()
   Serial.begin(9600);
 
   yaw = 0.0;
-  mpu.begin();
-  mpu.calcGyroOffsets(true);
+
   Serial.println("=====================================");
   Serial.println("Starting calibration...");
   tcs.begin(); // color sensor
-  setupWifi();
+  mpu.begin();
+  mpu.calcGyroOffsets(true);
   // pixels.begin(); // neopixels
 
   // Button
@@ -213,7 +214,7 @@ void translateIR() // takes action based on IR code received
   switch (results.value)
   {
   case 0xFFA25D:
-    Serial.println("POWER");
+    setColorLED();
     break;
   case 0xFFE21D:
     Serial.println("FUNC/STOP");
@@ -293,20 +294,19 @@ void translateIR() // takes action based on IR code received
 }
 void loop()
 {
-  if(millis() % 5000 == 0) {
-    checkDegree = false;
-    delay(1000);
-    setColorLED();
+  mpu.update();
+
+  if((millis() - lastTime) > 1000) {
+    lastTime = millis();
+    
+    Serial.println(mpu.getAngleZ());
+
   }
 
-  if(checkDegree) {
-    mpu.update();
-    Serial.println(mpu.getAngleZ());
-  }
 
     // delay(1000);
     // setColorLED();
-  
+
 
   int speed = 255 * 0.5;
 
@@ -419,20 +419,18 @@ void setColorNeopixel(int brightness)
 // function for showing color on a normal RGB led
 void setColorLED()
 {
-  
-  float red, green, blue;
-  tcs.setInterrupt(false); // turn on LED             // takes 50ms to read
-  tcs.getRGB(&red, &green, &blue);
-  delay(100);
-  tcs.setInterrupt(true); // turn off LED
-  delay(100);
-  Serial.print("R:\t");
-  Serial.print(int(red));
-  Serial.print("\tG:\t");
-  Serial.print(int(green));
-  Serial.print("\tB:\t");
-  Serial.print(int(blue));
-  Serial.print("\n");
+
+  // float red, green, blue;
+  // tcs.getRGB(&red, &green, &blue);
+
+  // Serial.print("R:\t");
+  // Serial.print(int(red));
+  // Serial.print("\tG:\t");
+  // Serial.print(int(green));
+  // Serial.print("\tB:\t");
+  // Serial.print(int(blue));
+  // Serial.print("\n");
+  setupWifi();
   sendColor(200.f, 255.f, 255.f);
   // pins not assigned
   // analogWrite(redPin, gammatable[(int)red]);
@@ -588,6 +586,7 @@ void sendColor(float red, float green, float blue)
 {
   postData = String(red) + ":" + String(green) + ":" + String(blue);
   // just for testing purpose
+    Serial.println(WiFi.status());
 
   if (WiFi.status() == WL_CONNECTED)
   {
@@ -602,9 +601,10 @@ void sendColor(float red, float green, float blue)
                      postData);
       client.println("Connection: close");
       client.println();
-      delay(1000);  
+      delay(1000);
+      WiFi.disconnect();
     }
- 
+
     checkDegree = true;
   }
 }
