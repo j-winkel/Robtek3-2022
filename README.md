@@ -33,18 +33,16 @@ Using an MPU5060 with a decoupling capacitor to reduce electrical noise.
 
 **TODO**
 -
-
-- Get the Arduino Wifi module. (and change out the ESP32 dev board).
-- Sketch and draw a 3D modelled frame for the car.
-- - Determin best way of placing components of the car frame. 
-- - Make gearing for robot to slow it down to better track movment trough gyroscope MPU6050 (gearing between 1:2 and 1:4).
-- - Determin how much we want to print/cut out for the car (wheels, axcels, gearing, ...). 
 - Complete implementation of robot movement.
 - - Posibly implement webserver movement ie. stop/start and maybe controls. (could be sick to implement smartphone trackpad, or simialr)
 - Line sensors for tracking boundaries of robot (code is partially complete and needs to be reworked into the code).
 - Graphics: Implement way of determining the specefic color of the (ground/card), and accuratley put it into a grid formation for display, as well as report back the positions in text. 
 - Power supply: choose suitable power supply to power car and additional components. 
-- 
+- Status LEDs:
+- - WIFI Connection
+- - Turning indication
+- - Color indication
+
 
 ---
 
