@@ -1,5 +1,5 @@
 
-
+#include <math.h>
 #include <ac_LG.h>
 #include <digitalWriteFast.h>
 #include <IRProtocol.h>
@@ -16,7 +16,6 @@
 #include <WiFiNINA.h>
 
 #include "Adafruit_TCS34725.h"
-//#include <TinyMPU6050.h>
 #include <MPU6050_tockn.h>
 
 //******************************
@@ -47,6 +46,7 @@
 #define brakeA 9
 //#define currentSensingA A0
 
+//Stickerless motor, white to ground
 const int currentSensingA = A0;
 
 // channel B
@@ -55,6 +55,8 @@ const int currentSensingA = A0;
 #define brakeB 8
 #define currentSensingB A1
 
+//Sticker motor, -
+#define motorspeed 150
 float turningTarget = 0.0;
 bool isTurning = false;
 bool setTurn = false;
@@ -129,14 +131,13 @@ String postData;
 String testPost;
 String postVariable = "";
 
-char* Network = "Ricosnet";
-char* SSID = "rocket123";
+char* Network = "Hyggebulen-2G";
+char* SSID = "L3C4PPCGX4";
 
 void setupWifi()
 {
   // Connecting to wifi
   Serial.println("Connecting to wifi: ");
-  WiFi.begin(Network, SSID);
   // wating for connection
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -144,6 +145,7 @@ void setupWifi()
 
     delay(1000);
     Serial.print(". ");
+
   }
   Serial.println("");
   Serial.print("WiFi connected: "),
@@ -254,7 +256,7 @@ void translateIR() // takes action based on IR code received
     break;
   case 0xFF30CF:
     Serial.println("1");
-    motorDirection(forward, 255);
+    motorDirection(forward, motorspeed);
     break;
   case 0xFF18E7:
     Serial.println("2");
@@ -265,7 +267,7 @@ void translateIR() // takes action based on IR code received
     break;
   case 0xFF10EF:
     Serial.println("4");
-    turn(270.0);
+    turn(90.0);
     break;
   case 0xFF38C7:
     Serial.println("5");
@@ -273,11 +275,11 @@ void translateIR() // takes action based on IR code received
     break;
   case 0xFF5AA5:
     Serial.println("6");
-    turn(90.0);
+    turn(270.0);
     break;
   case 0xFF42BD:
     Serial.println("7");
-    motorDirection(reverse, 255);
+    motorDirection(reverse, motorspeed);
     break;
   case 0xFF4AB5:
     Serial.println("8");
@@ -298,13 +300,22 @@ void translateIR() // takes action based on IR code received
 void loop()
 {
   mpu.update();
-  yaw = mpu.getAngleZ();
+  
+  float tempyaw = mpu.getAngleZ();
+  if(tempyaw < 0) {
+    tempyaw += 360.0;
+  }
+  yaw = fmodf(tempyaw, 360.0);
+  if(yaw < 0) {
+    yaw += 360.0;
+  }
   if((millis() - lastTime) > 1000) {
     lastTime = millis();
     
-    Serial.println(mpu.getAngleZ());
+    
 
   }
+  Serial.println(yaw);
 
 
     // delay(1000);
@@ -313,14 +324,14 @@ void loop()
 
   if (setTurn)
   {
-    setTurningPoint(turningTarget, &yaw, 255);
+    setTurningPoint(turningTarget, &yaw, motorspeed);
   }
   if (isTurning)
   {
     isTurning = !reachedTarget(&yaw, turningTarget);
     if (!isTurning)
     {
-      // motorDirection(halt, 0);
+      motorDirection(halt, 0);
       //  Test LED from color sensor
       analogWrite(greenPin, 0);
       // analogWrite(redPin, 255);
@@ -421,18 +432,18 @@ void setColorNeopixel(int brightness)
 void setColorLED()
 {
 
-  // float red, green, blue;
-  // tcs.getRGB(&red, &green, &blue);
-
-  // Serial.print("R:\t");
-  // Serial.print(int(red));
-  // Serial.print("\tG:\t");
-  // Serial.print(int(green));
-  // Serial.print("\tB:\t");
-  // Serial.print(int(blue));
-  // Serial.print("\n");
+  float red, green, blue;
+  tcs.getRGB(&red, &green, &blue);
+  delay(1000);
+  Serial.print("R:\t");
+  Serial.print(int(red));
+  Serial.print("\tG:\t");
+  Serial.print(int(green));
+  Serial.print("\tB:\t");
+  Serial.print(int(blue));
+  Serial.print("\n");
   setupWifi();
-  sendColor(200.f, 255.f, 255.f);
+  sendColor(red, green, blue);
   // pins not assigned
   // analogWrite(redPin, gammatable[(int)red]);
   //analogWrite(greenPin, gammatable[(int)green]);
@@ -452,21 +463,7 @@ void setColorLED()
 //   return qreValueB;
 // }
 
-// get distance for sonar sensor
-// int getDistance()
-// {
 
-//   digitalWrite(triggerPin, LOW);
-//   delayMicroseconds(2);
-//   digitalWrite(triggerPin, HIGH);
-//   delayMicroseconds(10);
-//   digitalWrite(triggerPin, LOW);
-
-//   duration = pulseIn(echoPin, HIGH);
-//   distance = duration * 0.034 / 2;
-
-//   return distance;
-// }
 
 void motorControls(int dir, bool dirValue, int brake, bool breakValue, int velocityName, int velocityValue)
 {
@@ -528,7 +525,7 @@ bool calculateRotationDirection(float turningPoint, float *currentDegrees)
 
 bool reachedTarget(float *degree, float target)
 {
-  float margin = 5;
+  float margin = 15;
   if (target == 360.0)
   {
     if ((*degree >= (target - margin)) || (*degree <= (target - (360 - margin))))
@@ -604,6 +601,7 @@ void sendColor(float red, float green, float blue)
       client.println();
       delay(1000);
       WiFi.disconnect();
+      WiFi.end();
     }
 
     checkDegree = true;
