@@ -129,15 +129,18 @@ String postData;
 String testPost;
 String postVariable = "";
 
+char* Network = "Ricosnet";
+char* SSID = "rocket123";
+
 void setupWifi()
 {
   // Connecting to wifi
   Serial.println("Connecting to wifi: ");
-  WiFi.begin("SprutteNet", "spruttesan");
+  WiFi.begin(Network, SSID);
   // wating for connection
   while (WiFi.status() != WL_CONNECTED)
   {
-    WiFi.begin("SprutteNet", "spruttesan");
+    WiFi.begin(Network, SSID);
 
     delay(1000);
     Serial.print(". ");
@@ -295,7 +298,7 @@ void translateIR() // takes action based on IR code received
 void loop()
 {
   mpu.update();
-
+  yaw = mpu.getAngleZ();
   if((millis() - lastTime) > 1000) {
     lastTime = millis();
     
@@ -307,8 +310,6 @@ void loop()
     // delay(1000);
     // setColorLED();
 
-
-  int speed = 255 * 0.5;
 
   if (setTurn)
   {
@@ -483,8 +484,8 @@ void turn(float target)
 void setTurningPoint(float turningPoint, float *currentDegrees, float speed)
 {
 
-  // motorControls(directionA, calculateRotationDirection(turningPoint, currentDegrees), brakeA, false, speedA, speed);
-  // motorControls(directionB, calculateRotationDirection(turningPoint, currentDegrees), brakeB, false, speedB, speed);
+  motorControls(directionA, calculateRotationDirection(turningPoint, currentDegrees), brakeA, false, speedA, speed);
+  motorControls(directionB, calculateRotationDirection(turningPoint, currentDegrees), brakeB, false, speedB, speed);
   //analogWrite(greenPin, 255);
   // analogWrite(redPin, 0);
   isTurning = true;
