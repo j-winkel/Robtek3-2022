@@ -8,10 +8,6 @@
 #include <IRremoteInt.h>
 #include <LongUnion.h>
 #include <TinyIRReceiver.h>
-
-//******************************
-// libiaries
-//******************************
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiNINA.h>
@@ -19,42 +15,36 @@
 #include "Adafruit_TCS34725.h"
 #include <MPU6050_tockn.h>
 
-//******************************
-// pin constants
-//******************************
-
-// the remaning numbers are the pins not in use:
-// Digital pins:    [/, /, 2, /,/, /, 6, 7, /, /, 10, /, /, /]
-// Analog pins:     [A0, A1, A2, A3, /, /]
-
-// the motor sheild uses the following ports: {A0, A1, 3, 8, 9, 11, 12, 13}
-
-// line sensor pins:
-#define lineSensorA A2
-#define lineSensorB A3
+// ================================================================
+// ===                         Pins                             ===
+// ================================================================
 
 // Line Sensor
 #define lineSens1 A2
 #define lineSens2 A3
-
 // channel A:
 #define directionA 12 // HIGH = forward, LOW = reverse
 #define speedA 3
 #define brakeA 9
-//#define currentSensingA A0
-
-// Stickerless motor, white to ground
-const int currentSensingA = A0;
-
+#define currentSensingA A0
 // channel B
 #define directionB 13 // HIGH = forward, LOW = reverse
 #define speedB 10
 #define brakeB 8
 #define currentSensingB A1
+#define neoPixel 5
+#define wifiConnectionLED 2
+
+// ================================================================
+// ===                       Variabels                          ===
+// ================================================================
+
+#define PIXELCOUNT 1 // amount neopixels currently in use
 
 // Sticker motor, -
 #define motorspeed 150
 float turningTarget = 0.0;
+
 bool isTurning = false;
 bool setTurn = false;
 bool checkDegree = true;
@@ -62,36 +52,22 @@ bool isOnColor = false;
 bool hasTakenColor = false;
 bool oppositeRotation = true;
 bool lineSensed = false;
-int hitWall = 0;
-#define neoPixel 5
-#define PIXELCOUNT 1 // amount neopixels currently in use
-#define wifiConnectionLED 2
 
+int hitWall = 0;
 float yaw;
 
-int receiver = 6; // Signal Pin of IR receiver to Arduino Digital Pin 11
 
 /*-----( Declare objects )-----*/
 IRrecv irrecv(receiver); // create instance of 'irrecv'
 decode_results results;  // create instance of 'decode_results'
+int receiver = 6; // Signal Pin of IR receiver to Arduino Digital Pin 11
 long remoteButtonDelay;
-
-/*-----( Function )-----*/
-// takes action based on IR code received
-
-// describing Remote IR codes
-
-//******************************
-// variables
-//******************************
 
 // direction control for motor movement
 enum control
 {
   forward,
   reverse,
-  left,
-  right,
   halt
 };
 
@@ -103,19 +79,8 @@ bool pressed;
 // color sensor
 uint16_t r, g, b, c, colorTemp, lux;
 
-// line sensor
-int qreValueA;
-int qreValueB;
-
-// sonar sensor
-int duration;
-int distance;
 MPU6050 mpu(Wire);
-//******************************
-// Declaration type
-//******************************
 
-long lastTime = 0;
 
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(PIXELCOUNT, neoPixel, NEO_GRB + NEO_KHZ800);
@@ -141,15 +106,17 @@ int ydirection = 0;
 String directions[4] = {"north", "east", "west", "south"};
 String currentDirection = "north";
 
+// ================================================================
+// ===                      Wifi Setup                          ===
+// ================================================================
 void setupWifi()
 {
-  // Connecting to wifi
+  // Connecting wifi
   Serial.println("Connecting to wifi: ");
   // wating for connection
   while (WiFi.status() != WL_CONNECTED)
   {
     WiFi.begin(Network, SSID);
-
     delay(1000);
     Serial.print(". ");
   }
@@ -157,13 +124,12 @@ void setupWifi()
   Serial.print("WiFi connected: "),
       Serial.print(WiFi.localIP()); // print the connected ip
 }
+
 // ================================================================
 // ===                         Setup                            ===
 // ================================================================
-
 void setup()
 {
-
   Serial.begin(9600);
 
   yaw = 0.0;
@@ -199,9 +165,9 @@ void setup()
   pinMode(neoPixel, OUTPUT);
 }
 
-//******************************
-// loop
-//******************************
+// ================================================================
+// ===                         IR Swittch                       ===
+// ================================================================
 void translateIR() // takes action based on IR code received
 {
   switch (results.value)
@@ -285,6 +251,10 @@ void translateIR() // takes action based on IR code received
 
   } // End Case
 }
+
+// ================================================================
+// ===                         Loop                             ===
+// ================================================================
 void loop()
 {
   //gets current degrees from MPU
@@ -319,12 +289,17 @@ void loop()
   getColor();
 }
 
+// ================================================================
+// ===                         Functions                        ===
+// ================================================================
+
 int freeRam()
 {
   extern int __heap_start, *__brkval;
   int v;
   return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
 }
+
 
 void readLineSensor()
 {
@@ -342,22 +317,8 @@ void readLineSensor()
   }
 }
 
-//******************************
-// Functions
-//******************************
-
-// function for showing color on a normal RGB led
 void setColorLED()
 {
-  delay(1000);
-  Serial.print("R:\t");
-  Serial.print(int(red));
-  Serial.print("\tG:\t");
-  Serial.print(int(green));
-  Serial.print("\tB:\t");
-  Serial.print(int(blue));
-  Serial.print("\n");
-
   delay(500);
   setupWifi();
   sendColor(red, green, blue);
@@ -422,11 +383,54 @@ void sortColorArray()
   }
 }
 
+// ==========================
+// ===   Motor Controls   ===
+// ==========================
+
 void motorControls(int dir, bool dirValue, int brake, bool breakValue, int velocityName, int velocityValue)
 {
   digitalWrite(dir, dirValue);
   digitalWrite(brake, breakValue);
   analogWrite(velocityName, velocityValue);
+}
+
+void motorDirection(control c, int s)
+{
+  int tolorance = 10; // one motor has more power than the other.
+
+  switch (c)
+  {
+  case forward:
+    motorControls(directionA, true, brakeA, false, speedA, s);
+    motorControls(directionB, false, brakeB, false, speedB, s - tolorance);
+    break;
+
+  case reverse:
+    motorControls(directionA, false, brakeA, false, speedA, s);
+    motorControls(directionB, true, brakeB, false, speedB, s - tolorance);
+    break;
+
+  case halt:
+    motorControls(directionA, false, brakeA, true, speedA, s);
+    motorControls(directionB, false, brakeB, true, speedB, s);
+    break;
+  }
+}
+
+bool calculateRotationDirection(float turningPoint, float *currentDegrees)
+{
+  if (*currentDegrees > turningPoint)
+  {
+    return true;
+  }
+  else if (*currentDegrees < turningPoint)
+  {
+    return false;
+  }
+  else
+  {
+    return true;
+  }
 }
 
 void turn(float target)
@@ -459,27 +463,10 @@ void turn(float target)
 
 void setTurningPoint(float turningPoint, float *currentDegrees, float speed)
 {
-
   motorControls(directionA, calculateRotationDirection(turningPoint, currentDegrees), brakeA, false, speedA, speed);
   motorControls(directionB, calculateRotationDirection(turningPoint, currentDegrees), brakeB, false, speedB, speed);
   isTurning = true;
   setTurn = false;
-}
-
-bool calculateRotationDirection(float turningPoint, float *currentDegrees)
-{
-  if (*currentDegrees > turningPoint)
-  {
-    return true;
-  }
-  else if (*currentDegrees < turningPoint)
-  {
-    return false;
-  }
-  else
-  {
-    return true;
-  }
 }
 
 bool reachedTarget(float *degree, float target)
@@ -495,35 +482,9 @@ bool reachedTarget(float *degree, float target)
   return false;
 }
 
-void motorDirection(control c, int s)
-{
-  switch (c)
-  {
-  case forward:
-    motorControls(directionA, true, brakeA, false, speedA, s);
-    motorControls(directionB, false, brakeB, false, speedB, s - 10);
-    break;
-
-  case reverse:
-    motorControls(directionA, false, brakeA, false, speedA, s);
-    motorControls(directionB, true, brakeB, false, speedB, s - 10);
-    break;
-
-  case right:
-
-    break;
-
-  case left:
-    motorControls(directionA, false, brakeA, false, speedA, s);
-    motorControls(directionB, false, brakeB, false, speedB, s);
-    break;
-
-  case halt:
-    motorControls(directionA, false, brakeA, true, speedA, s);
-    motorControls(directionB, false, brakeB, true, speedB, s);
-    break;
-  }
-}
+// ======================
+// ===   HTTP calls   ===
+// ======================
 
 void sendColor(float red, float green, float blue)
 {
@@ -555,33 +516,4 @@ void sendColor(float red, float green, float blue)
     checkDegree = true;
   }
 }
-// robtek opgave formulering
 
-/*
---- opgave formulering ---
-
-* En bane udformes med sorte kanter således at robotten kan læse og se kanterne
-
-* banen består af en grid med forskellige farver hvorfra disse farves position skal rapporteres tilbage.
-
-* tidligere er der blevet brugt digital compas, og det er en mulighed at benytte dette
-
-* der kan benyttes encoder eller tacometer til at bestelle motor rotation.
-
-* line sensor kan erstattes af farve sensor.
-
-* iot består af at melde kordinater tilbage til pc, og evt. starte robotten med et signal fra pc.
-
-* robottens bevægelse skal være præsis nok til at, dens position kan bestemmes, ud fra et start punkt.
-
-* 3d print er nice to have og ikke need to have. (men det er selvfølgelig bedre at have det, men det behøver ikke at være der.)
-
----- gode idere ---
-
-* kan regulrererobottens position med line sonsore der sidder i parallel.
-
-* ser ikke ud som om der skal benyttes obsicale avidnce alligevelle.
-
-* kan evt benytte breath first search for at finde alle tiles i en grid.
-
-*/
