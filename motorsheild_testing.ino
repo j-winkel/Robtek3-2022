@@ -2,12 +2,6 @@
 
 #include <math.h>
 #include <ac_LG.h>
-#include <digitalWriteFast.h>
-#include <IRProtocol.h>
-#include <IRremote.h>
-#include <IRremoteInt.h>
-#include <LongUnion.h>
-#include <TinyIRReceiver.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiNINA.h>
@@ -45,6 +39,7 @@
 #define motorspeed 150
 float turningTarget = 0.0;
 
+//States
 bool isTurning = false;
 bool setTurn = false;
 bool checkDegree = true;
@@ -56,12 +51,6 @@ bool lineSensed = false;
 int hitWall = 0;
 float yaw;
 
-
-/*-----( Declare objects )-----*/
-IRrecv irrecv(receiver); // create instance of 'irrecv'
-decode_results results;  // create instance of 'decode_results'
-int receiver = 6; // Signal Pin of IR receiver to Arduino Digital Pin 11
-long remoteButtonDelay;
 
 // direction control for motor movement
 enum control
@@ -93,8 +82,8 @@ String postData;
 String testPost;
 String postVariable = "";
 
-char *Network = "Hyggebulen-2G";
-char *SSID = "L3C4PPCGX4";
+char *Network = "NETWORK";
+char *SSID = "PASSWORD";
 
 volatile int numberOfColors = 0;
 float red, green, blue;
@@ -122,7 +111,7 @@ void setupWifi()
   }
   Serial.println("");
   Serial.print("WiFi connected: "),
-      Serial.print(WiFi.localIP()); // print the connected ip
+  Serial.print(WiFi.localIP()); // print the connected ip
 }
 
 // ================================================================
@@ -155,103 +144,14 @@ void setup()
   pinMode(speedB, OUTPUT);
 
   pinMode(wifiConnectionLED, OUTPUT);
-  irrecv.enableIRIn();
 
   // line Sensors
-  pinMode(lineSensorA, INPUT);
-  pinMode(lineSensorB, INPUT);
+  pinMode(lineSens1, INPUT);
+  pinMode(lineSens2, INPUT);
 
   // RGB led pins (to be determined, pins not assigned)
   pinMode(neoPixel, OUTPUT);
 }
-
-// ================================================================
-// ===                         IR Swittch                       ===
-// ================================================================
-void translateIR() // takes action based on IR code received
-{
-  switch (results.value)
-  {
-  case 0xFFA25D:
-    setColorLED();
-    break;
-  case 0xFFE21D:
-    Serial.println("FUNC/STOP");
-    break;
-  case 0xFF629D:
-    Serial.println("VOL+");
-    break;
-  case 0xFF22DD:
-    Serial.println("FAST BACK");
-    break;
-  case 0xFF02FD:
-    Serial.println("PAUSE");
-    break;
-  case 0xFFC23D:
-    Serial.println("FAST FORWARD");
-    break;
-  case 0xFFE01F:
-    Serial.println("DOWN");
-    break;
-  case 0xFFA857:
-    Serial.println("VOL-");
-    break;
-  case 0xFF906F:
-    Serial.println("UP");
-    break;
-  case 0xFF9867:
-    Serial.println("EQ");
-    break;
-  case 0xFFB04F:
-    Serial.println("ST/REPT");
-    break;
-  case 0xFF6897:
-    Serial.println("0");
-    break;
-  case 0xFF30CF:
-    Serial.println("1");
-    motorDirection(forward, motorspeed);
-    break;
-  case 0xFF18E7:
-    Serial.println("2");
-    turn(-180.0);
-    break;
-  case 0xFF7A85:
-    Serial.println("3");
-    break;
-  case 0xFF10EF:
-    Serial.println("4");
-    turn(90.0);
-    break;
-  case 0xFF38C7:
-    Serial.println("5");
-    motorDirection(halt, 0);
-    break;
-  case 0xFF5AA5:
-    Serial.println("6");
-    turn(-90.0);
-    break;
-  case 0xFF42BD:
-    Serial.println("7");
-    motorDirection(reverse, motorspeed);
-    break;
-  case 0xFF4AB5:
-    Serial.println("8");
-    turn(180.0);
-    break;
-  case 0xFF52AD:
-    Serial.println("9");
-    break;
-  case 0xFFFFFFFF:
-    Serial.println(" REPEAT");
-    break;
-
-  default:
-    Serial.println(" other button   ");
-
-  } // End Case
-}
-
 // ================================================================
 // ===                         Loop                             ===
 // ================================================================
@@ -293,14 +193,6 @@ void loop()
 // ===                         Functions                        ===
 // ================================================================
 
-int freeRam()
-{
-  extern int __heap_start, *__brkval;
-  int v;
-  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
-}
-
-
 void readLineSensor()
 {
   int read1 = analogRead(lineSens1);
@@ -314,6 +206,12 @@ void readLineSensor()
     motorDirection(reverse, motorspeed);
     hitWall = 2;
     lineSensed = true;
+  }
+  //If reached end of map
+  if(hitWall > 0) {
+    motorDirection(halt, 0);
+    currentDirection = "stop";
+    sendColor(red, green, blue);
   }
 }
 
