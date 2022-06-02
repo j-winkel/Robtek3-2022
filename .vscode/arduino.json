@@ -1,0 +1,6 @@
+{
+    "board": "arduino:megaavr:uno2018",
+    "sketch": "motorsheild_testing.ino",
+    "port": "COM6",
+    "configuration": "mode=off"
+}

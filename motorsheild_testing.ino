@@ -1,105 +1,137 @@
-//******************************
-// libiaries
-//******************************
-#include <Wire.h>
-#include "Adafruit_TCS34725.h"
-#include "WiFi.h"
 #include <Adafruit_NeoPixel.h>
-#include "digital_compass.h"
 
-//******************************
-// pin constants
-//******************************
+#include <math.h>
+#include <ac_LG.h>
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiNINA.h>
 
-// the remaning numbers are the pins not in use:
-// Digital pins:    [/, /, 2, /,/, /, 6, 7, /, /, 10, /, /, /]
-// Analog pins:     [A0, A1, A2, A3, /, /]
+#include "Adafruit_TCS34725.h"
+#include <MPU6050_tockn.h>
 
-// the motor sheild uses the following ports: {A0, A1, 3, 8, 9, 11, 12, 13}
+// ================================================================
+// ===                         Pins                             ===
+// ================================================================
 
-// line sensor pins:
-// #define lineSensorA A5
-// #define lineSensorB A4
-
-// sonar pins
-// #define echoPin 4
-// #define triggerPin 5
-
+// Line Sensor
+#define lineSens1 A2
+#define lineSens2 A3
 // channel A:
 #define directionA 12 // HIGH = forward, LOW = reverse
 #define speedA 3
 #define brakeA 9
-//#define currentSensingA A0
-
-const int currentSensingA = A0;
-
+#define currentSensingA A0
 // channel B
 #define directionB 13 // HIGH = forward, LOW = reverse
-#define speedB 11
+#define speedB 10
 #define brakeB 8
 #define currentSensingB A1
+#define neoPixel 5
+#define wifiConnectionLED 2
 
-// neopixels pins
-#define neoPixel 9
-#define PIXELCOUNT 5 // amount neopixels currently in use
+// ================================================================
+// ===                       Variabels                          ===
+// ================================================================
 
-// RGB led pins
-#define redPin 6
-#define greenPin 5
-#define bluePin 10
+#define PIXELCOUNT 1 // amount neopixels currently in use
 
-//******************************
-// variables
-//******************************
+// Sticker motor, -
+#define motorspeed 150
+float turningTarget = 0.0;
+
+//States
+bool isTurning = false;
+bool setTurn = false;
+bool checkDegree = true;
+bool isOnColor = false;
+bool hasTakenColor = false;
+bool oppositeRotation = true;
+bool lineSensed = false;
+
+int hitWall = 0;
+float yaw;
+
 
 // direction control for motor movement
 enum control
 {
   forward,
   reverse,
-  left,
-  right,
   halt
 };
 
 // Calibration
-#define button 4
-int buttonState = 0;
+#define lineDetected 4
+int buttonState;
 bool pressed;
 
 // color sensor
 uint16_t r, g, b, c, colorTemp, lux;
-byte gammatable[256];
 
-// line sensor
-int qreValueA;
-int qreValueB;
+MPU6050 mpu(Wire);
 
-// sonar sensor
-int duration;
-int distance;
 
-//******************************
-// Declaration type
-//******************************
-
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_614MS, TCS34725_GAIN_1X);
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(PIXELCOUNT, neoPixel, NEO_GRB + NEO_KHZ800);
 
-//******************************
-// setup
-//******************************
+char host[] = "federicoshytte.dk";
+
+WiFiClient client;
+
+String postData;
+String testPost;
+String postVariable = "";
+
+char *Network = "NETWORK";
+char *SSID = "PASSWORD";
+
+volatile int numberOfColors = 0;
+float red, green, blue;
+float colors[3];
+int x = 0;
+int y = 0;
+int xdirection = 0;
+int ydirection = 0;
+String directions[4] = {"north", "east", "west", "south"};
+String currentDirection = "north";
+
+// ================================================================
+// ===                      Wifi Setup                          ===
+// ================================================================
+void setupWifi()
+{
+  // Connecting wifi
+  Serial.println("Connecting to wifi: ");
+  // wating for connection
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    WiFi.begin(Network, SSID);
+    delay(1000);
+    Serial.print(". ");
+  }
+  Serial.println("");
+  Serial.print("WiFi connected: "),
+  Serial.print(WiFi.localIP()); // print the connected ip
+}
+
+// ================================================================
+// ===                         Setup                            ===
+// ================================================================
 void setup()
 {
+  Serial.begin(9600);
 
-  Serial.begin(115200);
+  yaw = 0.0;
 
-  startMPU();
-  tcs.begin();    // color sensor
-  pixels.begin(); // neopixels
+  Serial.println("=====================================");
+  Serial.println("Starting calibration...");
+  tcs.begin(); // color sensor
+  mpu.begin();
+  mpu.calcGyroOffsets(true);
+  pixels.begin();
 
   // Button
-  pinMode(button, INPUT_PULLUP);
+  pinMode(lineDetected, OUTPUT);
 
   // Setup motor A
   pinMode(directionA, OUTPUT); // Initiates Motor Channel A pin
@@ -111,151 +143,147 @@ void setup()
   pinMode(brakeB, OUTPUT);     // Initiates Brake Channel B pin
   pinMode(speedB, OUTPUT);
 
-  // sonar sensor
-  // pinMode(triggerPin, OUTPUT);
-  // pinMode(echoPin, INPUT);
-
-  for (int i = 0; i < 256; i++)
-  {
-    float x = i;
-    x /= 255;
-    x = pow(x, 2.5);
-    x *= 255;
-
-    gammatable[i] = x;
-
-    // Serial.println(gammatable[i]);
-  }
+  pinMode(wifiConnectionLED, OUTPUT);
 
   // line Sensors
-  // pinMode(lineSensorA, INPUT);
-  // pinMode(lineSensorB, INPUT);
+  pinMode(lineSens1, INPUT);
+  pinMode(lineSens2, INPUT);
 
   // RGB led pins (to be determined, pins not assigned)
-  pinMode(redPin, OUTPUT);
-  pinMode(greenPin, OUTPUT);
-  pinMode(bluePin, OUTPUT);
+  pinMode(neoPixel, OUTPUT);
 }
-
-//******************************
-// loop
-//******************************
-
+// ================================================================
+// ===                         Loop                             ===
+// ================================================================
 void loop()
 {
-  int speed = 255 * 0.5;
-  float yaw, pitch, roll;
-
-  getRotationContinuous(&yaw, &pitch, &roll);
-
-
-
+  //gets current degrees from MPU
+  mpu.update();
+  yaw = mpu.getAngleZ();
+  if (setTurn)
   {
-    motorDirection(halt, 255);
+    setTurningPoint(turningTarget, &yaw, motorspeed);
   }
-  buttonState = digitalRead(button);
-
-  if (millis() % 200 == 0)
+  if (isTurning)
   {
-    setColorLED();
+    isTurning = !reachedTarget(&yaw, turningTarget);
+    if (!isTurning)
+    {
+      motorDirection(halt, 0);
+      if (hitWall > 0)
+      {
+        motorDirection(forward, motorspeed);
+        hitWall--;
+      }
+    }
   }
-
-  if (buttonState == LOW && !pressed)
-  {
-    Serial.println("HAOIDAJIWODJIAWODA FUCK");
-    pressed = true;
-
-    // stuff
-  }
-  else if (pressed && buttonState == HIGH)
-  {
-    pressed = false;
-  }
-  // setColorNeopixel(100);
-}
-
-// const double currentFactor = 2/3.3; // 2 Amps at 9 Volts: 0.22
-
-//******************************
-// Functions
-//******************************
-
-// probably needs to be revised as it currently is a not great with all the numbers and such.
-// double getCurrentA(int motorCurrent){
-//   const double currentFactor = 2/3.3; // 2 Amps at 3.3 Volts
-//   double currentVoltage = map(analogRead(motorCurrent), 0, 1024, 0, 9000); // 9000 = 9V battery
-//   double current = currentVoltage*currentFactor;
-//   return current;
-// }
-
-// function for showing color in neopixels
-void setColorNeopixel(int brightness)
-{
-
-  float red, green, blue;
-  tcs.setInterrupt(false); // turn on LED             // takes 50ms to read
-  tcs.getRGB(&red, &green, &blue);
-  tcs.setInterrupt(true); // turn off LED
-
-  pixels.begin();
+  //Sets neopixel the current color
   uint32_t color = pixels.Color(red, green, blue);
   for (int i = 0; i < PIXELCOUNT; i++)
   {
     pixels.fill(color);
-    pixels.setBrightness(brightness);
+    pixels.setBrightness(100);
     pixels.show();
+  }
+  readLineSensor();
+  getColor();
+}
+
+// ================================================================
+// ===                         Functions                        ===
+// ================================================================
+
+void readLineSensor()
+{
+  int read1 = analogRead(lineSens1);
+  int remapped1 = map(read1, 0, 1023, 0, 100);
+  int read2 = analogRead(lineSens2);
+  int remapped2 = map(read2, 0, 1023, 0, 100);
+  if ((remapped1 > 59 || remapped2 > 59) && !lineSensed)
+  {
+    oppositeRotation = !oppositeRotation;
+    motorDirection(halt, 0);
+    motorDirection(reverse, motorspeed);
+    hitWall = 2;
+    lineSensed = true;
+  }
+  //If reached end of map
+  if(hitWall > 0) {
+    motorDirection(halt, 0);
+    currentDirection = "stop";
+    sendColor(red, green, blue);
   }
 }
 
-// function for showing color on a normal RGB led
 void setColorLED()
 {
-
-  float red, green, blue;
-  tcs.setInterrupt(false); // turn on LED             // takes 50ms to read
-  tcs.getRGB(&red, &green, &blue);
-  tcs.setInterrupt(true); // turn off LED
-
-  Serial.print("R:\t");
-  Serial.print(int(red));
-  Serial.print("\tG:\t");
-  Serial.print(int(green));
-  Serial.print("\tB:\t");
-  Serial.print(int(blue));
-  Serial.print("\n");
-
-  // pins not assigned
-  analogWrite(redPin, gammatable[(int)red]);
-  analogWrite(greenPin, gammatable[(int)green]);
-  analogWrite(bluePin, gammatable[(int)blue]);
+  delay(500);
+  setupWifi();
+  sendColor(red, green, blue);
 }
 
-// rewrite function cause it sucks
-// int readLineSensorA(){
-//   qreValueA = analogRead(lineSensorA);
-//   return qreValueA;
-// }
+void getColor()
+{
+  tcs.getRGB(&colors[0], &colors[1], &colors[2]);
+  red = colors[0];
+  green = colors[1];
+  blue = colors[2];
+  sortColorArray();
+  if ((colors[0] - colors[2]) > 30)
+  {
+    isOnColor = true;
+  }
+  else
+  {
+    isOnColor = false;
+    hasTakenColor = false;
+  }
+  if (isOnColor && !hasTakenColor)
+  {
+    motorDirection(halt, 0);
+    if (hitWall != 2)
+    {
+      delay(100);
+      setColorLED();
+    }
+    if (hitWall > 0)
+    {
+      oppositeRotation ? turn(90) : turn(-90);
+    }
+    if(hitWall == 0) {
+      lineSensed = false;
+    }
+    motorDirection(forward, motorspeed);
+    hasTakenColor = true;
+  }
+}
 
-// int readLineSensorB(){
-//   qreValueB = analogRead(lineSensorB);
-//   return qreValueB;
-// }
+void sortColorArray()
+{
+  float temp = 0;
+  if (colors[0] < colors[1])
+  {
+    temp = colors[0];
+    colors[0] = colors[1];
+    colors[1] = temp;
+  }
+  if (colors[0] < colors[2])
+  {
+    temp = colors[0];
+    colors[0] = colors[2];
+    colors[2] = temp;
+  }
+  if (colors[1] < colors[2])
+  {
+    temp = colors[1];
+    colors[1] = colors[2];
+    colors[2] = temp;
+  }
+}
 
-// get distance for sonar sensor
-// int getDistance()
-// {
-
-//   digitalWrite(triggerPin, LOW);
-//   delayMicroseconds(2);
-//   digitalWrite(triggerPin, HIGH);
-//   delayMicroseconds(10);
-//   digitalWrite(triggerPin, LOW);
-
-//   duration = pulseIn(echoPin, HIGH);
-//   distance = duration * 0.034 / 2;
-
-//   return distance;
-// }
+// ==========================
+// ===   Motor Controls   ===
+// ==========================
 
 void motorControls(int dir, bool dirValue, int brake, bool breakValue, int velocityName, int velocityValue)
 {
@@ -264,36 +292,20 @@ void motorControls(int dir, bool dirValue, int brake, bool breakValue, int veloc
   analogWrite(velocityName, velocityValue);
 }
 
-// void turnDirection(control c) {
-//   switch (c) 
-//   {
-//     case north: 
-
-//   }
-// }
-
 void motorDirection(control c, int s)
 {
+  int tolorance = 10; // one motor has more power than the other.
+
   switch (c)
   {
   case forward:
     motorControls(directionA, true, brakeA, false, speedA, s);
-    motorControls(directionB, false, brakeB, false, speedB, s);
+    motorControls(directionB, false, brakeB, false, speedB, s - tolorance);
     break;
 
   case reverse:
     motorControls(directionA, false, brakeA, false, speedA, s);
-    motorControls(directionB, true, brakeB, false, speedB, s);
-    break;
-
-  case right:
-    motorControls(directionA, true, brakeA, false, speedA, s);
-    motorControls(directionB, true, brakeB, false, speedB, s);
-    break;
-
-  case left:
-    motorControls(directionA, false, brakeA, false, speedA, s);
-    motorControls(directionB, false, brakeB, false, speedB, s);
+    motorControls(directionB, true, brakeB, false, speedB, s - tolorance);
     break;
 
   case halt:
@@ -303,33 +315,103 @@ void motorDirection(control c, int s)
   }
 }
 
-// robtek opgave formulering
+bool calculateRotationDirection(float turningPoint, float *currentDegrees)
+{
+  if (*currentDegrees > turningPoint)
+  {
+    return true;
+  }
+  else if (*currentDegrees < turningPoint)
+  {
+    return false;
+  }
+  else
+  {
+    return true;
+  }
+}
 
-/*
---- opgave formulering ---
+void turn(float target)
+{
+  turningTarget = yaw + target;
+  setTurn = true;
+  if (!oppositeRotation)
+  {
+    if (hitWall == 2)
+    {
+      currentDirection = directions[1];
+    }
+    else if (hitWall == 1)
+    {
+      currentDirection = directions[3];
+    }
+  }
+  else
+  {
+    if (hitWall == 2)
+    {
+      currentDirection = directions[1];
+    }
+    else if (hitWall == 1)
+    {
+      currentDirection = directions[0];
+    }
+  }
+}
 
-* En bane udformes med sorte kanter således at robotten kan læse og se kanterne
+void setTurningPoint(float turningPoint, float *currentDegrees, float speed)
+{
+  motorControls(directionA, calculateRotationDirection(turningPoint, currentDegrees), brakeA, false, speedA, speed);
+  motorControls(directionB, calculateRotationDirection(turningPoint, currentDegrees), brakeB, false, speedB, speed);
+  isTurning = true;
+  setTurn = false;
+}
 
-* banen består af en grid med forskellige farver hvorfra disse farves position skal rapporteres tilbage.
+bool reachedTarget(float *degree, float target)
+{
+  float degreeabs = fabs(*degree);
+  float targetabs = fabs(target);
+  float diff = fabs(targetabs - degreeabs);
+  float margin = 7.5;
+  if (margin > diff)
+  {
+    return true;
+  }
+  return false;
+}
 
-* tidligere er der blevet brugt digital compas, og det er en mulighed at benytte dette
+// ======================
+// ===   HTTP calls   ===
+// ======================
 
-* der kan benyttes encoder eller tacometer til at bestelle motor rotation.
+void sendColor(float red, float green, float blue)
+{
+  postData = String(red) + ":" + String(green) + ":" + String(blue) + ":" + currentDirection;
+  // just for testing purpose
+  String coords = "x " + String(x) + " : y " + String(y);
+  Serial.println(coords);
+  Serial.println(WiFi.status());
+  digitalWrite(wifiConnectionLED, HIGH);
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    if (client.connect(host, 80))
+    {
+      Serial.println("connected to server");
+      // Make a HTTP request:
+      client.println("POST /api/colors HTTP/1.1");
+      client.println("Host: " + String(host));
+      client.println("Content-Type: text/plain");
+      client.println("tester:"
+                     "" +
+                     postData);
+      client.println("Connection: close");
+      client.println();
+      delay(1000);
+      WiFi.disconnect();
+      WiFi.end();
+    }
+    digitalWrite(wifiConnectionLED, LOW);
+    checkDegree = true;
+  }
+}
 
-* line sensor kan erstattes af farve sensor.
-
-* iot består af at melde kordinater tilbage til pc, og evt. starte robotten med et signal fra pc.
-
-* robottens bevægelse skal være præsis nok til at, dens position kan bestemmes, ud fra et start punkt.
-
-* 3d print er nice to have og ikke need to have. (men det er selvfølgelig bedre at have det, men det behøver ikke at være der.)
-
----- gode idere ---
-
-* kan regulrererobottens position med line sonsore der sidder i parallel.
-
-* ser ikke ud som om der skal benyttes obsicale avidnce alligevelle.
-
-* kan evt benytte breath first search for at finde alle tiles i en grid.
-
-*/
