@@ -17,3 +17,4 @@ The colorsensor works with i2c as well as the MPU5060 so in turn the colorsensor
 
 
 purple: scl
+
