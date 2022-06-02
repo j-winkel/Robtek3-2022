@@ -287,20 +287,16 @@ void translateIR() // takes action based on IR code received
 }
 void loop()
 {
+  //gets current degrees from MPU
   mpu.update();
   yaw = mpu.getAngleZ();
   if (setTurn)
   {
-
     setTurningPoint(turningTarget, &yaw, motorspeed);
-    Serial.print(turningTarget);
   }
   if (isTurning)
   {
     isTurning = !reachedTarget(&yaw, turningTarget);
-    Serial.print(turningTarget);
-    Serial.print("   :   ");
-    Serial.println(yaw);
     if (!isTurning)
     {
       motorDirection(halt, 0);
@@ -311,7 +307,7 @@ void loop()
       }
     }
   }
-
+  //Sets neopixel the current color
   uint32_t color = pixels.Color(red, green, blue);
   for (int i = 0; i < PIXELCOUNT; i++)
   {
@@ -319,22 +315,8 @@ void loop()
     pixels.setBrightness(100);
     pixels.show();
   }
-
   readLineSensor();
   getColor();
-
-  if (irrecv.decode(&results) && !pressed) // have we received an IR signal?
-  {
-    Serial.println("test");
-    translateIR();
-    irrecv.resume(); // receive the next value
-    remoteButtonDelay = millis() + 500;
-    pressed = true;
-  }
-  if (millis() > remoteButtonDelay)
-  {
-    pressed = false;
-  }
 }
 
 int freeRam()
@@ -350,11 +332,6 @@ void readLineSensor()
   int remapped1 = map(read1, 0, 1023, 0, 100);
   int read2 = analogRead(lineSens2);
   int remapped2 = map(read2, 0, 1023, 0, 100);
-  Serial.print("Line Sensor 1: ");
-  Serial.println(remapped1);
-  Serial.print("Line Sensor 2: ");
-  Serial.println(remapped2);
-  Serial.println(hitWall);
   if ((remapped1 > 59 || remapped2 > 59) && !lineSensed)
   {
     oppositeRotation = !oppositeRotation;
@@ -417,7 +394,6 @@ void getColor()
     if(hitWall == 0) {
       lineSensed = false;
     }
-
     motorDirection(forward, motorspeed);
     hasTakenColor = true;
   }
